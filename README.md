@@ -4,6 +4,8 @@
 
 The EVRA Session Management Console is a comprehensive full-stack application designed to track, manage, and monitor Electric Vehicle (EV) charging sessions.
 
+This monorepo is pushed into a public GitHub repository which is: [https://github.com/Barath-Codes/Barath-EVRA-FullStack-Mini-App](https://github.com/Barath-Codes/Barath-EVRA-FullStack-Mini-App)
+
 ## Quick Start (Monorepo Setup)
 
 This project has been structured as a native npm workspace monorepo. To start the entire stack:
