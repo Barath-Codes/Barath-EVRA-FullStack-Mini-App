@@ -1,0 +1,20 @@
+{
+  "name": "evra-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w api",
+    "dev:web": "npm run dev -w web",
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "build:api": "npm run build -w api",
+    "build:web": "npm run build -w web",
+    "build": "npm run build --workspaces --if-present",
+    "test:api": "npm test -w api"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
