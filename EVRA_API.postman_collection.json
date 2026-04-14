@@ -1,0 +1,688 @@
+{
+  "info": {
+    "name": "EVRA Session Console API",
+    "description": "REST API collection for the EVRA EV Charging Session Management Console.\n\n**Base URL:** http://localhost:9000\n\n**Workflow:**\n1. Start a session\n2. Submit meter readings\n3. Stop the session\n4. View session details / list sessions\n5. Get charger summary",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:9000",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "s-001",
+      "type": "string"
+    },
+    {
+      "key": "chargerId",
+      "value": "CH-01",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Check if the API server is running."
+          },
+          "response": [
+            {
+              "name": "OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"ok\"\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "description": "Session lifecycle endpoints: start, meter readings, stop, get details, and list.",
+      "item": [
+        {
+          "name": "Start Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('sessionId', body.sessionId);",
+                  "    pm.collectionVariables.set('chargerId', body.chargerId);",
+                  "    pm.test('Session created with Active status', function () {",
+                  "        pm.expect(body.status).to.eql('Active');",
+                  "        pm.expect(body.totalEnergyWh).to.eql(0);",
+                  "        pm.expect(body.sessionId).to.match(/^s-\\d{3,}$/);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chargerId\": \"CH-01\",\n  \"connectorId\": 1,\n  \"idTag\": \"USER-42\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sessions/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "start"
+              ]
+            },
+            "description": "Start a new EV charging session.\n\n**Validations:**\n- `chargerId` (string, required)\n- `connectorId` (positive integer, required)\n- `idTag` (string, required)\n\n**Conflict:** Returns 409 if an active session already exists on the same charger + connector."
+          },
+          "response": [
+            {
+              "name": "201 — Session Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"sessionId\": \"s-001\",\n  \"chargerId\": \"CH-01\",\n  \"connectorId\": 1,\n  \"idTag\": \"USER-42\",\n  \"status\": \"Active\",\n  \"startTime\": \"2025-01-01T10:00:00.000Z\",\n  \"endTime\": null,\n  \"totalEnergyWh\": 0\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            {
+              "name": "409 — Duplicate Session",
+              "status": "Conflict",
+              "code": 409,
+              "body": "{\n  \"error\": \"AppError\",\n  \"message\": \"Active session already exists on charger CH-01, connector 1\"\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            {
+              "name": "400 — Validation Error",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"error\": \"VALIDATION_ERROR\",\n  \"message\": \"connectorId: Required; idTag: Required\"\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Submit Meter Reading",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Meter reading accepted', function () {",
+                  "        pm.expect(body.totalEnergyWh).to.be.above(0);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energyWh\": 2500,\n  \"timestamp\": \"2025-01-01T10:05:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sessions/{{sessionId}}/meter",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "{{sessionId}}",
+                "meter"
+              ]
+            },
+            "description": "Submit a meter reading for an active session.\n\n**Validations:**\n- `energyWh` (non-negative number, required)\n- `timestamp` (ISO string, required)\n\n**Anomaly Detection:** If `energyWh` is less than the previous reading, the session is marked as `Faulted` and a `DECREASING_METER` anomaly is recorded."
+          },
+          "response": [
+            {
+              "name": "200 — Reading Accepted",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"sessionId\": \"s-001\",\n  \"chargerId\": \"CH-01\",\n  \"connectorId\": 1,\n  \"idTag\": \"USER-42\",\n  \"status\": \"Active\",\n  \"startTime\": \"2025-01-01T10:00:00.000Z\",\n  \"endTime\": null,\n  \"totalEnergyWh\": 2500\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            {
+              "name": "200 — Faulted (Decreasing Meter)",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"sessionId\": \"s-001\",\n  \"chargerId\": \"CH-01\",\n  \"connectorId\": 1,\n  \"idTag\": \"USER-42\",\n  \"status\": \"Faulted\",\n  \"startTime\": \"2025-01-01T10:00:00.000Z\",\n  \"endTime\": null,\n  \"totalEnergyWh\": 1000\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            {
+              "name": "404 — Session Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"error\": \"AppError\",\n  \"message\": \"Session s-999 not found\"\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Submit Meter Reading (Anomaly — Decreasing)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energyWh\": 1000,\n  \"timestamp\": \"2025-01-01T10:10:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sessions/{{sessionId}}/meter",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "{{sessionId}}",
+                "meter"
+              ]
+            },
+            "description": "Submit a DECREASING meter reading to trigger anomaly detection.\n\nThe `energyWh` value (1000) is intentionally lower than the previous reading (2500) to demonstrate the `DECREASING_METER` anomaly flow.\n\n**Expected result:** Session status becomes `Faulted`."
+          },
+          "response": []
+        },
+        {
+          "name": "Stop Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Session completed', function () {",
+                  "        pm.expect(body.status).to.eql('Completed');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energyWh\": 8400,\n  \"timestamp\": \"2025-01-01T11:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sessions/{{sessionId}}/stop",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "{{sessionId}}",
+                "stop"
+              ]
+            },
+            "description": "Stop an active charging session with the final energy reading.\n\n**Validations:**\n- `energyWh` (non-negative number, required)\n- `timestamp` (ISO string, required)\n\n**Behavior:** Sets status to `Completed`, stores the final meter reading, and records the end time."
+          },
+          "response": [
+            {
+              "name": "200 — Session Completed",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"sessionId\": \"s-001\",\n  \"chargerId\": \"CH-01\",\n  \"connectorId\": 1,\n  \"idTag\": \"USER-42\",\n  \"status\": \"Completed\",\n  \"startTime\": \"2025-01-01T10:00:00.000Z\",\n  \"endTime\": \"2025-01-01T11:00:00Z\",\n  \"totalEnergyWh\": 8400\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            {
+              "name": "404 — Session Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"error\": \"AppError\",\n  \"message\": \"Session s-999 not found\"\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Get Session Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Session details returned with readings and anomalies', function () {",
+                  "        pm.expect(body).to.have.property('meterReadings');",
+                  "        pm.expect(body).to.have.property('anomalies');",
+                  "        pm.expect(body.meterReadings).to.be.an('array');",
+                  "        pm.expect(body.anomalies).to.be.an('array');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/{{sessionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "{{sessionId}}"
+              ]
+            },
+            "description": "Get full details of a session, including all meter readings and anomalies.\n\n**Returns:**\n- Session metadata\n- `meterReadings[]` — ordered list of all readings\n- `anomalies[]` — any detected anomalies (e.g., DECREASING_METER)"
+          },
+          "response": [
+            {
+              "name": "200 — Full Session Details",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"sessionId\": \"s-001\",\n  \"chargerId\": \"CH-01\",\n  \"connectorId\": 1,\n  \"idTag\": \"USER-42\",\n  \"status\": \"Completed\",\n  \"startTime\": \"2025-01-01T10:00:00.000Z\",\n  \"endTime\": \"2025-01-01T11:00:00Z\",\n  \"totalEnergyWh\": 8400,\n  \"meterReadings\": [\n    { \"energyWh\": 2500, \"timestamp\": \"2025-01-01T10:05:00Z\" },\n    { \"energyWh\": 8400, \"timestamp\": \"2025-01-01T11:00:00Z\" }\n  ],\n  \"anomalies\": []\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            {
+              "name": "200 — Faulted Session with Anomaly",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"sessionId\": \"s-002\",\n  \"chargerId\": \"CH-01\",\n  \"connectorId\": 2,\n  \"idTag\": \"USER-42\",\n  \"status\": \"Faulted\",\n  \"startTime\": \"2025-01-01T10:00:00.000Z\",\n  \"endTime\": null,\n  \"totalEnergyWh\": 1000,\n  \"meterReadings\": [\n    { \"energyWh\": 5000, \"timestamp\": \"2025-01-01T10:10:00Z\" },\n    { \"energyWh\": 1000, \"timestamp\": \"2025-01-01T10:15:00Z\" }\n  ],\n  \"anomalies\": [\n    {\n      \"type\": \"DECREASING_METER\",\n      \"detectedAt\": \"2025-01-01T10:15:00.000Z\",\n      \"details\": { \"previousValue\": 5000, \"newValue\": 1000 }\n    }\n  ]\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "List Sessions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Paginated list returned', function () {",
+                  "        pm.expect(body).to.have.property('sessions');",
+                  "        pm.expect(body).to.have.property('total');",
+                  "        pm.expect(body).to.have.property('page');",
+                  "        pm.expect(body).to.have.property('limit');",
+                  "        pm.expect(body.sessions).to.be.an('array');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sessions?chargerId=CH-01&status=Active&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions"
+              ],
+              "query": [
+                {
+                  "key": "chargerId",
+                  "value": "CH-01",
+                  "description": "Filter by charger ID (optional)"
+                },
+                {
+                  "key": "status",
+                  "value": "Active",
+                  "description": "Filter by status: Active, Completed, Faulted (optional)"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Results per page (default: 10, max: 100)"
+                }
+              ]
+            },
+            "description": "List all sessions with optional filtering and pagination.\n\n**Query Parameters:**\n- `chargerId` — filter by charger (optional)\n- `status` — filter by Active / Completed / Faulted (optional)\n- `page` — page number, default 1\n- `limit` — results per page, default 10, max 100"
+          },
+          "response": [
+            {
+              "name": "200 — Paginated Session List",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"sessions\": [\n    {\n      \"sessionId\": \"s-001\",\n      \"chargerId\": \"CH-01\",\n      \"connectorId\": 1,\n      \"idTag\": \"USER-42\",\n      \"status\": \"Active\",\n      \"startTime\": \"2025-01-01T10:00:00.000Z\",\n      \"endTime\": null,\n      \"totalEnergyWh\": 2500\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"limit\": 10\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "List All Sessions (No Filters)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions"
+              ]
+            },
+            "description": "List all sessions without any filters. Returns paginated results with defaults (page=1, limit=10)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Chargers",
+      "description": "Charger aggregation endpoints.",
+      "item": [
+        {
+          "name": "Get Charger Summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Charger summary returned', function () {",
+                  "        pm.expect(body).to.have.property('totalSessions');",
+                  "        pm.expect(body).to.have.property('totalEnergyWh');",
+                  "        pm.expect(body).to.have.property('activeSessions');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/chargers/{{chargerId}}/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chargers",
+                "{{chargerId}}",
+                "summary"
+              ]
+            },
+            "description": "Get aggregated statistics for a charger.\n\n**Returns:**\n- `totalSessions` — total number of sessions for this charger\n- `totalEnergyWh` — sum of energy across all sessions\n- `activeSessions` — count of currently active sessions\n\n**404** if no sessions exist for the charger."
+          },
+          "response": [
+            {
+              "name": "200 — Charger Summary",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"chargerId\": \"CH-01\",\n  \"totalSessions\": 42,\n  \"totalEnergyWh\": 185000,\n  \"activeSessions\": 2\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            },
+            {
+              "name": "404 — No Sessions Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"error\": \"AppError\",\n  \"message\": \"No sessions found for charger CH-99\"\n}",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Scenarios",
+      "description": "Requests that demonstrate error handling and validation.",
+      "item": [
+        {
+          "name": "Start Session — Missing Fields (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chargerId\": \"CH-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sessions/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "start"
+              ]
+            },
+            "description": "Missing `connectorId` and `idTag` — should return 400 with validation error details."
+          },
+          "response": []
+        },
+        {
+          "name": "Meter on Unknown Session (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energyWh\": 1000,\n  \"timestamp\": \"2025-01-01T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sessions/s-999/meter",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "s-999",
+                "meter"
+              ]
+            },
+            "description": "Submit meter reading for a session that doesn't exist — should return 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Stop Unknown Session (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energyWh\": 5000,\n  \"timestamp\": \"2025-01-01T11:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/sessions/s-999/stop",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "s-999",
+                "stop"
+              ]
+            },
+            "description": "Stop a session that doesn't exist — should return 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Session ID Format (400)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/sessions/invalid-id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "sessions",
+                "invalid-id"
+              ]
+            },
+            "description": "Use a malformed session ID — should return 400 with 'Invalid session ID format'."
+          },
+          "response": []
+        },
+        {
+          "name": "Charger Summary — No Sessions (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/chargers/CH-NONEXISTENT/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chargers",
+                "CH-NONEXISTENT",
+                "summary"
+              ]
+            },
+            "description": "Request summary for a charger with no sessions — should return 404."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
